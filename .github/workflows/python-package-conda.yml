@@ -32,4 +32,4 @@ jobs:
       # Шаг 4: Запускаем бота (или другие команды для запуска)
       - name: Run the bot
         run: |
-          python your_script.py
+          python main.py
