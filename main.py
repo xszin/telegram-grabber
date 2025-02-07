@@ -976,52 +976,53 @@ if __name__ == "__main__":
 async def send_notification(message):
     chat_id = my_id  
     await bot.send_message(chat_id, message)
-    async def main():
-        try:
-            # Объявление переменной channel_mapping перед использованием
-            global channel_mapping
-            channel_mapping = {}
 
-            # Отправка уведомления о запуске бота
-            await send_notification("Бот запущен")
+async def start(message):
+    # Ваш код для обработки команды /start
+    pass
 
-            # Обновление соответствий каналов
-            try:
-                with open('channel_mapping.pickle', 'rb') as f:
-                    channel_mapping = pickle.load(f)
-            except FileNotFoundError:
-                pass
+async def help(message):
+    # Ваш код для обработки команды /help
+    pass
 
-            await client.start()
-            await client.connect()
+async def main():
+    global channel_mapping
+    channel_mapping = {}
 
-            dp.register_message_handler(start, commands=['start'], commands_prefix='/')
-            dp.register_message_handler(help, commands=['help'], commands_prefix='/')
-
-            try:
-        await client.start()
-        logger.info("Telethon клиент запущен")
+    try:
+        # Отправка уведомления о запуске бота
         await send_notification("Бот запущен")
+
+        # Обновление соответствий каналов
+        try:
+            with open('channel_mapping.pickle', 'rb') as f:
+                channel_mapping = pickle.load(f)
+        except FileNotFoundError:
+            pass
+
+        await client.start()
+        await client.connect()
+
+        # Регистрация обработчиков команд
+        dp.register_message_handler(start, commands=['start'], commands_prefix='/')
+        dp.register_message_handler(help, commands=['help'], commands_prefix='/')
+
+        logger.info("Telethon клиент запущен")
         await dp.start_polling()
+
     except Exception as e:
         logger.error(f"Ошибка при запуске: {e}")
         await send_notification(f"Произошла ошибка: {e}")
+
     finally:
+        # Завершение работы бота
         await send_notification("Бот остановлен")
         await bot.session.close()
         await client.disconnect()
         logger.info("Бот остановлен")
 
-        except Exception as e:
-            # Отправка уведомления об ошибке
-            await send_notification(f"Произошла ошибка: {str(e)}")
-
-        finally:
-            # Отправка уведомления об остановке бота
-            await send_notification("Бот остановлен")
-
-            await client.disconnect()
-        try:
-            asyncio.run(main())
-        except KeyboardInterrupt:
-            logger.info("Бот остановлен вручную")
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Бот остановлен вручную")
