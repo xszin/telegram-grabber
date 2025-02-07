@@ -15,6 +15,9 @@ from telethon.tl.types import MessageMediaWebPage, MessageMediaPhoto, MessageMed
 from config import api_id, api_hash, bot_token, my_id, technical_channel_id, new_link, proxy_url, openai_api_key, new_username 
 import httpx
 
+
+
+
 # Определение состояния для ожидания ввода ID канала
 class ChannelAdding(StatesGroup):
     waiting_for_channel_id = State()
@@ -24,6 +27,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 editing_message_id = None
+
 
 moderation_active = False
 message_storage = {} 
@@ -54,6 +58,7 @@ try:
 except FileNotFoundError:
     channel_mapping = {}
 
+
 def save_channels():
     with open('channels.pickle', 'wb') as f:
         pickle.dump(channels, f)
@@ -62,16 +67,21 @@ def save_channels():
     with open('channel_mapping.pickle', 'wb') as f:
         pickle.dump(channel_mapping, f)
 
+
 def replace_link(text, new_link):
     # Ищем ссылки с Markdown форматированием [text](http://url)
     markdown_url_pattern = re.compile(r'\[([^\]]+)\]\(http[s]?://[^\)]+\)')
     # Заменяем URL, сохраняя оригинальный текст ссылки
     return markdown_url_pattern.sub(r'[\1](' + new_link + ')', text)
 
+
+
 def replace_at_word(text, new_word):
     if not text:
         return text
     return re.sub(r'@(\w+)', new_word, text)
+
+
 
 async def send_media(message, destination_channel_id, allow_forward=True):
     if message.media and isinstance(message.media, (MessageMediaPhoto, MessageMediaDocument)):
@@ -83,19 +93,35 @@ async def send_media(message, destination_channel_id, allow_forward=True):
     else:
         return await client.send_message(destination_channel_id, message.text)
 
+
+
 # Отправка уведомления в Telegram чат
 async def send_notification(message):
     chat_id = my_id 
     await bot.send_message(chat_id, message)
 
+
+
 bot_id = int(bot_token.split(':')[0])
 
+
+
+
+
 # Обработка выключения модерации
+
+
 @dp.callback_query_handler(lambda c: c.data == 'moderation_off')
 async def process_moderation_off(callback_query: types.CallbackQuery):
+    # Обновите статус модерации
     global moderation_active
     moderation_active = False
+
+    # Отправить уведомление пользователю
     await bot.answer_callback_query(callback_query.id, "Модерация выключена.")
+
+
+
 
 @dp.callback_query_handler(lambda c: c.data.startswith('send_'))
 async def process_send(callback_query: types.CallbackQuery):
@@ -109,6 +135,7 @@ async def process_send(callback_query: types.CallbackQuery):
         if match:
             destination_channel_id = int(match.group(1))
         else:
+            # Обработка ошибки: ID канала не найден
             await bot.answer_callback_query(callback_query.id, "Ошибка: ID канала не найден.")
             return
 
@@ -121,7 +148,10 @@ async def process_send(callback_query: types.CallbackQuery):
             message_ids = [msg.id for msg in stored_message]
             await client.delete_messages(technical_channel_id, message_ids)
         else:  # Обработка одиночного сообщения
+            # Отправка сообщения на канал с извлеченным ID
             await client.send_message(destination_channel_id, stored_message.text, file=stored_message.media)
+
+            # Удаление сообщения из технического канала
             await client.delete_messages(technical_channel_id, message_id)
 
         await client.delete_messages(callback_query.message.chat.id, callback_query.message.message_id)
@@ -129,6 +159,20 @@ async def process_send(callback_query: types.CallbackQuery):
         await bot.answer_callback_query(callback_query.id, "Сообщение(я) отправлено(ы) и удалено(ы).")
     else:
         await bot.answer_callback_query(callback_query.id, "Ошибка: Сообщение не найдено.")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @dp.callback_query_handler(lambda c: c.data.startswith('decline_'))
 async def process_decline(callback_query: types.CallbackQuery):
@@ -143,12 +187,19 @@ async def process_decline(callback_query: types.CallbackQuery):
                 await client.delete_messages(technical_channel_id, message_id)
             
             del message_storage[message_id]  # Удаление записи из хранилища
+
+            # Дополнительно удаляем модерационное сообщение
             await client.delete_messages(callback_query.message.chat.id, callback_query.message.message_id)
+
             await bot.answer_callback_query(callback_query.id, "Сообщение отклонено и удалено.")
         except Exception as e:
             await bot.answer_callback_query(callback_query.id, f"Ошибка удаления сообщения: {e}")
     else:
         await bot.answer_callback_query(callback_query.id, "Ошибка: Сообщение не найдено для удаления.")
+
+
+
+
 
 @dp.callback_query_handler(lambda c: c.data.startswith('edited_'))
 async def process_edited(callback_query: types.CallbackQuery):
@@ -157,12 +208,14 @@ async def process_edited(callback_query: types.CallbackQuery):
     if message_id in message_storage:
         try:
             if isinstance(message_storage[message_id], list):
+                # Получаем и обновляем все сообщения в альбоме
                 updated_messages = []
                 for msg in message_storage[message_id]:
                     edited_message = await client.get_messages(technical_channel_id, ids=msg.id)
                     updated_messages.append(edited_message)
                 message_storage[message_id] = updated_messages
             else:
+                # Получаем и обновляем одиночное сообщение
                 edited_message = await client.get_messages(technical_channel_id, ids=message_id)
                 message_storage[message_id] = edited_message
 
@@ -174,6 +227,11 @@ async def process_edited(callback_query: types.CallbackQuery):
     else:
         logger.error(f"Сообщение с ID {message_id} не найдено.")
         await bot.answer_callback_query(callback_query.id, "Ошибка: Сообщение не найдено.")
+
+
+
+
+
 
 async def get_destination_channel_info(destination_channel_id):
     destination_channel = await client.get_entity(destination_channel_id)
@@ -207,11 +265,13 @@ async def my_event_handler(event):
                     InlineKeyboardButton("Отредактировано", callback_data=f'edited_{sent_message.id}'),
                     InlineKeyboardButton("Рерайт текста", callback_data=f'rewrite_{sent_message.id}')
                 )
+                # Получаем информацию о канале из файла
                 destination_channel_id = channel_mapping.get(event.chat_id, None)
                 if destination_channel_id is not None:
                     destination_channel_title, _ = await get_destination_channel_info(destination_channel_id)
                     await bot.send_message(technical_channel_id, f"Выберите действие ({destination_channel_title} - ID {destination_channel_id}):", reply_markup=moderation_keyboard)
             else:
+                # Обработка случая, когда нет медиа в сообщении
                 sent_message = await client.send_message(technical_channel_id, updated_text)
                 message_storage[sent_message.id] = sent_message
                 moderation_keyboard = InlineKeyboardMarkup(row_width=3).add(
@@ -220,6 +280,7 @@ async def my_event_handler(event):
                     InlineKeyboardButton("Отредактировано", callback_data=f'edited_{sent_message.id}'),
                     InlineKeyboardButton("Рерайт текста", callback_data=f'rewrite_{sent_message.id}')
                 )
+                # Получаем информацию о канале из файла
                 destination_channel_id = channel_mapping.get(event.chat_id, None)
                 if destination_channel_id is not None:
                     destination_channel_title, _ = await get_destination_channel_info(destination_channel_id)
@@ -245,6 +306,18 @@ async def my_event_handler(event):
             except Exception as e:
                 logger.error(f"Ошибка при отправке сообщения: {str(e)}")
 
+
+
+
+
+
+
+
+
+
+
+
+
 @client.on(events.Album(chats=channels))
 async def album_event_handler(event):
     grouped_media = event.messages
@@ -263,10 +336,15 @@ async def album_event_handler(event):
         sent_messages = await client.send_file(technical_channel_id, media_list, caption=updated_caption)
         last_message_id = sent_messages[-1].id
 
+        # Сохраняем весь список сообщений для дальнейшего использования
         message_storage[last_message_id] = sent_messages
+
+        # Получаем информацию о канале из файла
         destination_channel_id = channel_mapping[event.chat_id]
         destination_channel_title, destination_channel_id = await get_destination_channel_info(destination_channel_id)
+        
 
+        # Отправка кнопок после сообщения
         moderation_keyboard = InlineKeyboardMarkup(row_width=2).add(
             InlineKeyboardButton("Отправить", callback_data=f'send_{last_message_id}'),
             InlineKeyboardButton("Отклонить", callback_data=f'decline_{last_message_id}'),
@@ -276,12 +354,21 @@ async def album_event_handler(event):
         return
 
     for source_channel_id, destination_channel_id in channel_mapping.items():
+        # Проверяем, что альбом пришел из нужного исходного канала
         if event.chat_id == source_channel_id:
             try:
                 await client.send_file(destination_channel_id, media_list, caption=updated_caption)
                 logger.info(f"Альбом переслан: {updated_caption}")
             except Exception as e:
                 logger.error(f"Ошибка при отправке альбома: {str(e)}")
+
+
+            
+
+
+
+
+
 
 @dp.callback_query_handler(lambda c: c.data.startswith('rewrite_'))
 async def process_rewrite(callback_query: types.CallbackQuery):
@@ -301,6 +388,9 @@ proxies = {
     "https://": proxy_url
 }
 
+
+
+
 async def rewrite_text_with_chatgpt(text, openai_api_key):
     prompt_text = "Переформулируй этот текст: " + text
     json_data = {
@@ -309,6 +399,7 @@ async def rewrite_text_with_chatgpt(text, openai_api_key):
     }
     headers = {"Authorization": f"Bearer {openai_api_key}"}
 
+    # Установка таймаута для запроса
     timeout = httpx.Timeout(10.0, connect=90.0)
 
     async with httpx.AsyncClient(proxies=proxies, timeout=timeout) as client:
@@ -326,6 +417,15 @@ async def rewrite_text_with_chatgpt(text, openai_api_key):
         print(f"Ошибка запроса: {response.status_code} - {response.text}")
         return None
 
+
+
+
+
+
+
+
+
+# Функция для создания клавиатуры с меню
 def create_menu_keyboard():
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton("Помощь", callback_data='help'))
@@ -341,10 +441,13 @@ def create_menu_keyboard():
     keyboard.add(InlineKeyboardButton("Отправить последние сообщения", callback_data='last_messages'))
     keyboard.add(InlineKeyboardButton("Перезагрузить бота", callback_data='restart_bot'))
 
+    # Меняем текст кнопки "Модерация" в зависимости от статуса модерации
     moderation_text = "Модерация: выкл" if moderation_active else "Модерация: вкл"
     keyboard.add(InlineKeyboardButton(moderation_text, callback_data='toggle_moderation'))
 
     return keyboard
+
+
 
 
 @dp.callback_query_handler(lambda c: c.data == 'show_mapping')
@@ -870,6 +973,11 @@ async def restart_bot(message: types.Message):
 
 
 if __name__ == "__main__":
+   loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+async def send_notification(message):
+    chat_id = my_id  
+    await bot.send_message(chat_id, message)
     async def main():
         try:
             # Объявление переменной channel_mapping перед использованием
@@ -892,7 +1000,19 @@ if __name__ == "__main__":
             dp.register_message_handler(start, commands=['start'], commands_prefix='/')
             dp.register_message_handler(help, commands=['help'], commands_prefix='/')
 
-            await dp.start_polling()
+            try:
+        await client.start()
+        logger.info("Telethon клиент запущен")
+        await send_notification("Бот запущен")
+        await dp.start_polling()
+    except Exception as e:
+        logger.error(f"Ошибка при запуске: {e}")
+        await send_notification(f"Произошла ошибка: {e}")
+    finally:
+        await send_notification("Бот остановлен")
+        await bot.session.close()
+        await client.disconnect()
+        logger.info("Бот остановлен")
 
         except Exception as e:
             # Отправка уведомления об ошибке
@@ -903,5 +1023,7 @@ if __name__ == "__main__":
             await send_notification("Бот остановлен")
 
             await client.disconnect()
-
-    asyncio.run(main())
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            logger.info("Бот остановлен вручную")
