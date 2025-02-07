@@ -1,0 +1,9 @@
+aiogram==2.25.1
+asyncio
+beautifulsoup4
+httpx
+lxml
+pickle-mixin
+python-telegram-bot
+requests
+telethon
