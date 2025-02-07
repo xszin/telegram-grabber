@@ -973,8 +973,6 @@ async def restart_bot(message: types.Message):
 
 
 if __name__ == "__main__":
-   loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
 async def send_notification(message):
     chat_id = my_id  
     await bot.send_message(chat_id, message)
